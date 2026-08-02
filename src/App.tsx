@@ -4,7 +4,7 @@ import HeroSection from './components/HeroSection';
 import ServiceFees from './components/ServiceFees';
 import BookingWizard from './components/BookingWizard';
 import ContactSection from './components/ContactSection';
-import EmployeePortal from './components/EmployeePortal';
+import OwnerPortal from './components/OwnerPortal';
 import PinLockScreen from './components/PinLockScreen';
 import { ShieldAlert, BookOpen, Calendar, HelpCircle, Shield, Phone, Sparkles, Scale, CheckSquare, Lock } from 'lucide-react';
 import notaryLogo from './assets/images/notary_logo_1785623795805.jpg';
