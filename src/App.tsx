@@ -5,13 +5,13 @@ import ServiceFees from './components/ServiceFees';
 import BookingWizard from './components/BookingWizard';
 import ContactSection from './components/ContactSection';
 import OwnerPortal from './components/OwnerPortal';
-import PinLockScreen from './components/PinLockScreen';
+import OwnerLoginScreen from './components/OwnerLoginScreen';
 import { ShieldAlert, BookOpen, Calendar, HelpCircle, Shield, Phone, Sparkles, Scale, CheckSquare, Lock } from 'lucide-react';
 import notaryLogo from './assets/images/notary_logo_1785623795805.jpg';
 
 // Import Firestore instance and methods
 import { db } from './lib/firebase';
-import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export default function App() {
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -45,12 +45,16 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState<'home' | 'rates' | 'book' | 'contact' | 'owner'>('home');
-  const [isOwnerMode, setIsOwnerMode] = useState<boolean>(() => {
-    return localStorage.getItem('notareez_is_owner') === 'true';
-  });
-  const [ownerPin, setOwnerPin] = useState<string>('4219');
+  const [isOwnerMode, setIsOwnerMode] = useState<boolean>(false);
 
-  // Push local-only bookings and inquiries to Firestore once on mount (so that any bookings made on client browsers before Firebase are automatically synced to the cloud!)
+  const [ownerUsername, setOwnerUsername] = useState<string>(() => {
+    return localStorage.getItem('notareez_owner_username') || 'GMarieA';
+  });
+  const [ownerPassword, setOwnerPassword] = useState<string>(() => {
+    return localStorage.getItem('notareez_owner_password') || '2406Talon';
+  });
+
+  // Push local-only bookings and inquiries to Firestore once on mount
   useEffect(() => {
     const syncLocalToCloud = async () => {
       try {
@@ -75,34 +79,34 @@ export default function App() {
     syncLocalToCloud();
   }, []);
 
-  // 1. Subscribe to Bookings real-time
+  // 1. Subscribe to Bookings real-time (robust client-side sorting)
   useEffect(() => {
-    const q = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'bookings'), (snapshot) => {
       const list: Booking[] = [];
       snapshot.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() } as Booking);
       });
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setBookings(list);
       localStorage.setItem('notareez_bookings', JSON.stringify(list));
       setIsSynced(true);
       setSyncError(null);
     }, (error) => {
       console.error("Error syncing bookings from Firestore:", error);
-      setSyncError(`Live database sync warning: ${error.message}. Offline backup is active.`);
+      setSyncError(`Live database sync notice: ${error.message}. Offline backup active.`);
       setIsSynced(false);
     });
     return () => unsubscribe();
   }, []);
 
-  // 2. Subscribe to Inquiries real-time
+  // 2. Subscribe to Inquiries real-time (robust client-side sorting)
   useEffect(() => {
-    const q = query(collection(db, 'inquiries'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'inquiries'), (snapshot) => {
       const list: ContactInquiry[] = [];
       snapshot.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() } as ContactInquiry);
       });
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setInquiries(list);
       localStorage.setItem('notareez_inquiries', JSON.stringify(list));
     }, (error) => {
@@ -120,7 +124,6 @@ export default function App() {
         setSchedule(data);
         localStorage.setItem('notareez_schedule', JSON.stringify(data));
       } else {
-        // Initialize with default schedule if missing
         setDoc(docRef, DEFAULT_WEEKLY_SCHEDULE)
           .catch(err => console.error("Error setting default schedule:", err));
         setSchedule(DEFAULT_WEEKLY_SCHEDULE);
@@ -131,52 +134,48 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 4. Subscribe to Owner PIN real-time
+  // 4. Subscribe to Owner Credentials real-time
   useEffect(() => {
-    const docRef = doc(db, 'settings', 'owner_pin');
+    const docRef = doc(db, 'settings', 'owner_auth');
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
-        setOwnerPin(docSnap.data().pin);
+        const data = docSnap.data();
+        if (data.username) {
+          setOwnerUsername(data.username);
+          localStorage.setItem('notareez_owner_username', data.username);
+        }
+        if (data.password) {
+          setOwnerPassword(data.password);
+          localStorage.setItem('notareez_owner_password', data.password);
+        }
       } else {
-        // Initialize with default PIN if missing
-        setDoc(docRef, { pin: '4219' })
-          .catch(err => console.error("Error setting default PIN:", err));
-        setOwnerPin('4219');
+        setDoc(docRef, { username: 'GMarieA', password: '2406Talon' })
+          .catch(err => console.error("Error setting default owner auth:", err));
       }
     }, (error) => {
-      console.error("Error syncing owner pin from Firestore:", error);
+      console.error("Error syncing owner credentials from Firestore:", error);
     });
     return () => unsubscribe();
   }, []);
 
-  // Check URL query parameters or hash to trigger automatic owner log in
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hasOwnerKey = params.has('owner') || params.get('portal') === 'georgina' || window.location.hash.includes('owner');
-    if (hasOwnerKey) {
-      setIsOwnerMode(true);
-      localStorage.setItem('notareez_is_owner', 'true');
-      setActiveTab('owner');
-    }
-  }, []);
-
   const handleOwnerLoginSuccess = () => {
     setIsOwnerMode(true);
-    localStorage.setItem('notareez_is_owner', 'true');
   };
 
   const handleOwnerSignOut = () => {
     setIsOwnerMode(false);
-    localStorage.setItem('notareez_is_owner', 'false');
     setActiveTab('home');
   };
 
-  const handlePinChange = async (newPin: string) => {
-    setOwnerPin(newPin);
+  const handleCredentialsChange = async (newUsername: string, newPassword: string) => {
+    setOwnerUsername(newUsername);
+    setOwnerPassword(newPassword);
+    localStorage.setItem('notareez_owner_username', newUsername);
+    localStorage.setItem('notareez_owner_password', newPassword);
     try {
-      await setDoc(doc(db, 'settings', 'owner_pin'), { pin: newPin });
+      await setDoc(doc(db, 'settings', 'owner_auth'), { username: newUsername, password: newPassword });
     } catch (error) {
-      console.error("Error changing owner PIN in Firestore:", error);
+      console.error("Error updating owner credentials in Firestore:", error);
     }
   };
 
@@ -190,13 +189,11 @@ export default function App() {
     }
   };
 
-  // State modification triggers saving to Firestore
   const handleBookingCreated = async (newBooking: Booking) => {
     const updated = [newBooking, ...bookings];
     setBookings(updated);
     localStorage.setItem('notareez_bookings', JSON.stringify(updated));
     try {
-      // Use client-generated ID as document ID for easy identification and overwrite avoidance
       await setDoc(doc(db, 'bookings', newBooking.id), newBooking);
     } catch (error) {
       console.error("Error creating booking in Firestore:", error);
@@ -222,6 +219,43 @@ export default function App() {
       await updateDoc(doc(db, 'bookings', bookingId), { status });
     } catch (error) {
       console.error("Error updating booking status in Firestore:", error);
+    }
+  };
+
+  const handleUpdateBookingFee = async (bookingId: string, travelFee: number, notaryFee: number, totalFee: number) => {
+    const updated = bookings.map(b => b.id === bookingId ? {
+      ...b,
+      estimatedTravelFee: travelFee,
+      estimatedNotaryFee: notaryFee,
+      estimatedTotal: totalFee
+    } : b);
+    setBookings(updated);
+    localStorage.setItem('notareez_bookings', JSON.stringify(updated));
+    try {
+      await updateDoc(doc(db, 'bookings', bookingId), {
+        estimatedTravelFee: travelFee,
+        estimatedNotaryFee: notaryFee,
+        estimatedTotal: totalFee
+      });
+    } catch (error) {
+      console.error("Error updating booking fee in Firestore:", error);
+    }
+  };
+
+  const handleConvertInquiryToBooking = async (newBooking: Booking, inquiryId: string) => {
+    const updatedBookings = [newBooking, ...bookings];
+    const updatedInquiries = inquiries.filter(i => i.id !== inquiryId);
+
+    setBookings(updatedBookings);
+    setInquiries(updatedInquiries);
+    localStorage.setItem('notareez_bookings', JSON.stringify(updatedBookings));
+    localStorage.setItem('notareez_inquiries', JSON.stringify(updatedInquiries));
+
+    try {
+      await setDoc(doc(db, 'bookings', newBooking.id), newBooking);
+      await deleteDoc(doc(db, 'inquiries', inquiryId));
+    } catch (error) {
+      console.error("Error converting inquiry to booking in Firestore:", error);
     }
   };
 
@@ -350,22 +384,8 @@ export default function App() {
         ))}
       </div>
 
-      {/* Admin Notice Bar */}
-      {activeTab === 'owner' && (
-        <div className="bg-gradient-to-r from-[#C5A059]/20 via-[#E5C079]/10 to-transparent border-b border-[#2D2D2D] py-2.5 px-4 text-center text-xs text-[#C5A059] flex flex-col md:flex-row items-center justify-center gap-2 animate-fadeIn">
-          <div className="flex items-center justify-center gap-1.5">
-            <ShieldAlert className="w-4 h-4 text-[#C5A059] shrink-0" />
-            <span>Logged in as <strong>Georgina Aubain</strong>. Direct link to your secure portal (bookmark this!):</span>
-          </div>
-          <span className="bg-black/80 px-2.5 py-1 rounded text-[10px] font-mono border border-[#C5A059]/30 text-[#E5C079] select-all">
-            {window.location.origin}/?owner=true
-          </span>
-        </div>
-      )}
-
       {/* Main Container Views */}
       <main className="flex-grow">
-        
         <div className="animate-fadeIn">
           {activeTab === 'home' && (
             <HeroSection onTabChange={setActiveTab} />
@@ -391,24 +411,27 @@ export default function App() {
                 onStatusChange={handleStatusChange}
                 onDeleteBooking={handleDeleteBooking}
                 onDeleteInquiry={handleDeleteInquiry}
+                onUpdateBookingFee={handleUpdateBookingFee}
+                onConvertInquiryToBooking={handleConvertInquiryToBooking}
                 schedule={schedule}
                 onScheduleChange={handleScheduleChange}
                 onSignOut={handleOwnerSignOut}
-                currentPin={ownerPin}
-                onPinChange={handlePinChange}
+                currentUsername={ownerUsername}
+                currentPassword={ownerPassword}
+                onCredentialsChange={handleCredentialsChange}
                 isSynced={isSynced}
                 syncError={syncError}
               />
             ) : (
-              <PinLockScreen 
-                correctPin={ownerPin}
+              <OwnerLoginScreen 
+                storedUsername={ownerUsername}
+                storedPassword={ownerPassword}
                 onSuccess={handleOwnerLoginSuccess}
                 onBackToSite={() => setActiveTab('home')}
               />
             )
           )}
         </div>
-
       </main>
 
       {/* Page Footer */}

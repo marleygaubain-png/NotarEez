@@ -12,11 +12,14 @@ interface OwnerPortalProps {
   onStatusChange: (bookingId: string, status: Booking['status']) => void;
   onDeleteBooking: (bookingId: string) => void;
   onDeleteInquiry: (inquiryId: string) => void;
+  onUpdateBookingFee?: (bookingId: string, travelFee: number, notaryFee: number, totalFee: number) => void;
+  onConvertInquiryToBooking?: (booking: Booking, inquiryId: string) => void;
   schedule: WeeklySchedule;
   onScheduleChange: (updated: WeeklySchedule) => void;
   onSignOut: () => void;
-  currentPin: string;
-  onPinChange: (newPin: string) => void;
+  currentUsername?: string;
+  currentPassword?: string;
+  onCredentialsChange?: (username: string, password: string) => void;
   isSynced?: boolean;
   syncError?: string | null;
 }
@@ -27,11 +30,14 @@ export default function OwnerPortal({
   onStatusChange, 
   onDeleteBooking, 
   onDeleteInquiry,
+  onUpdateBookingFee,
+  onConvertInquiryToBooking,
   schedule, 
   onScheduleChange,
   onSignOut,
-  currentPin,
-  onPinChange,
+  currentUsername = 'GMarieA',
+  currentPassword = '2406Talon',
+  onCredentialsChange,
   isSynced = true,
   syncError = null
 }: OwnerPortalProps) {
@@ -40,20 +46,107 @@ export default function OwnerPortal({
   const [statusFilter, setStatusFilter] = useState<'all' | Booking['status']>('all');
   const [selectedScheduleDay, setSelectedScheduleDay] = useState<string>('Monday');
 
-  const [pinInput, setPinInput] = useState('');
+  // Credentials settings state
+  const [usernameInput, setUsernameInput] = useState(currentUsername);
+  const [passwordInput, setPasswordInput] = useState(currentPassword);
   const [settingsMsg, setSettingsMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const handleSavePin = () => {
-    if (pinInput.length !== 4) {
-      setSettingsMsg({ text: 'PIN must be exactly 4 digits.', type: 'error' });
+  // Edit Fee Modal State
+  const [editingFeeBooking, setEditingFeeBooking] = useState<Booking | null>(null);
+  const [editTravelFee, setEditTravelFee] = useState<number>(0);
+  const [editNotaryFee, setEditNotaryFee] = useState<number>(0);
+
+  // Convert Inquiry to Booking Modal State
+  const [convertingInquiry, setConvertingInquiry] = useState<ContactInquiry | null>(null);
+  const [convName, setConvName] = useState('');
+  const [convEmail, setConvEmail] = useState('');
+  const [convPhone, setConvPhone] = useState('');
+  const [convServiceId, setConvServiceId] = useState('acknowledgment');
+  const [convQuantity, setConvQuantity] = useState(1);
+  const [convLocationType, setConvLocationType] = useState('home');
+  const [convAddress, setConvAddress] = useState('');
+  const [convDate, setConvDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [convTimeSlot, setConvTimeSlot] = useState('10:00 AM');
+  const [convNotaryFee, setConvNotaryFee] = useState(10);
+  const [convTravelFee, setConvTravelFee] = useState(25);
+  const [convNotes, setConvNotes] = useState('');
+
+  const handleSaveCredentials = () => {
+    if (!usernameInput.trim()) {
+      setSettingsMsg({ text: 'Username cannot be blank.', type: 'error' });
       return;
     }
-    onPinChange(pinInput);
-    setSettingsMsg({ text: 'PIN updated successfully! Use this new PIN to sign in next time.', type: 'success' });
-    setPinInput('');
+    if (passwordInput.length < 4) {
+      setSettingsMsg({ text: 'Password must be at least 4 characters long.', type: 'error' });
+      return;
+    }
+    if (onCredentialsChange) {
+      onCredentialsChange(usernameInput.trim(), passwordInput);
+    }
+    setSettingsMsg({ text: 'Owner credentials updated successfully!', type: 'success' });
     setTimeout(() => {
       setSettingsMsg(null);
     }, 4000);
+  };
+
+  const openFeeEditModal = (b: Booking) => {
+    setEditingFeeBooking(b);
+    setEditTravelFee(b.estimatedTravelFee || 25);
+    setEditNotaryFee(b.estimatedNotaryFee || 10);
+  };
+
+  const handleSaveFeeEdit = () => {
+    if (!editingFeeBooking) return;
+    const total = editNotaryFee + editTravelFee;
+    if (onUpdateBookingFee) {
+      onUpdateBookingFee(editingFeeBooking.id, editTravelFee, editNotaryFee, total);
+    }
+    setEditingFeeBooking(null);
+  };
+
+  const openConvertModal = (inq: ContactInquiry) => {
+    setConvertingInquiry(inq);
+    setConvName(inq.name);
+    setConvEmail(inq.email);
+    setConvPhone(inq.phone);
+    setConvServiceId('acknowledgment');
+    setConvQuantity(1);
+    setConvLocationType('home');
+    setConvAddress('Client Specified Address (To Be Confirmed)');
+    setConvDate(new Date().toISOString().split('T')[0]);
+    setConvTimeSlot('10:00 AM');
+    setConvNotaryFee(10);
+    setConvTravelFee(25);
+    setConvNotes(inq.message || '');
+  };
+
+  const handleConfirmConvertInquiry = () => {
+    if (!convertingInquiry) return;
+    const newBooking: Booking = {
+      id: `NEZ-${Math.floor(100000 + Math.random() * 900000)}`,
+      clientName: convName,
+      clientEmail: convEmail,
+      clientPhone: convPhone,
+      serviceId: convServiceId,
+      quantity: convQuantity,
+      locationType: convLocationType,
+      customAddress: convAddress,
+      distanceBracketId: 'under_10',
+      date: convDate,
+      timeSlot: convTimeSlot,
+      additionalNotes: convNotes,
+      estimatedNotaryFee: convNotaryFee,
+      estimatedTravelFee: convTravelFee,
+      estimatedTotal: convNotaryFee + convTravelFee,
+      status: 'confirmed',
+      createdAt: new Date().toISOString()
+    };
+
+    if (onConvertInquiryToBooking) {
+      onConvertInquiryToBooking(newBooking, convertingInquiry.id);
+    }
+    setConvertingInquiry(null);
+    setActiveTab('bookings');
   };
 
 
@@ -351,14 +444,24 @@ export default function OwnerPortal({
                       </div>
 
                       {/* Footer Cost and Actions */}
-                      <div className="flex justify-between items-center pt-3 border-t border-[#2D2D2D]">
-                        <div>
-                          <span className="text-[10px] text-gray-500 block uppercase">Estimated Revenue</span>
-                          <span className="font-mono font-bold text-base text-[#C5A059]">${b.estimatedTotal}.00</span>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-3 border-t border-[#2D2D2D]">
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <span className="text-[10px] text-gray-500 block uppercase">Estimated Revenue</span>
+                            <span className="font-mono font-bold text-base text-[#C5A059]">${b.estimatedTotal}.00</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openFeeEditModal(b)}
+                            className="px-2 py-1 bg-[#C5A059]/10 hover:bg-[#C5A059]/20 border border-[#C5A059]/30 rounded-lg text-[10px] text-[#C5A059] font-semibold transition flex items-center gap-1 cursor-pointer"
+                            title="Edit / Negotiate Travel Fee"
+                          >
+                            <DollarSign className="w-3 h-3" /> Edit Fee
+                          </button>
                         </div>
 
                         {/* Quick action triggers */}
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-1.5 self-end sm:self-auto">
                           {b.status === 'confirmed' && (
                             <>
                               <button
@@ -642,8 +745,19 @@ export default function OwnerPortal({
                         </button>
                       </div>
                     </div>
-                    <div className="p-3 bg-[#0D0D0D] rounded-lg border border-[#2D2D2D] text-xs text-gray-300 italic">
+                    <div className="p-3 bg-[#0D0D0D] rounded-lg border border-[#2D2D2D] text-xs text-gray-300 italic mb-3">
                       "{inq.message}"
+                    </div>
+
+                    <div className="flex justify-end border-t border-[#2D2D2D] pt-2.5">
+                      <button
+                        type="button"
+                        onClick={() => openConvertModal(inq)}
+                        className="px-3.5 py-1.5 bg-gradient-to-r from-[#C5A059] to-[#E5C079] hover:from-[#d1ab63] hover:to-[#ebd08f] text-black rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-[#C5A059]/10 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Convert to Booking (Owner Override)
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -721,37 +835,37 @@ export default function OwnerPortal({
           </div>
         )}
 
-        {/* Tab 5: PIN SETTINGS */}
+        {/* Tab 5: OWNER SECURITY SETTINGS */}
         {activeTab === 'settings' && (
           <div className="max-w-md mx-auto bg-[#121212] p-6 rounded-2xl border border-[#2D2D2D] space-y-6 animate-fadeIn">
             <div>
               <h3 className="text-lg font-serif text-white mb-1 flex items-center gap-2">
                 <Key className="w-4 h-4 text-[#C5A059]" />
-                Owner Portal PIN Settings
+                Owner Account Security Settings
               </h3>
-              <p className="text-xs text-gray-400">Update the 4-digit PIN required to unlock this administrative dashboard on any device.</p>
+              <p className="text-xs text-gray-400">Update the login username and password required to access your administrative portal.</p>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs text-gray-400 font-medium block">Current PIN</label>
-                <div className="py-2.5 px-3.5 bg-[#0D0D0D] border border-[#2D2D2D] rounded-xl text-sm font-mono text-[#C5A059] font-bold tracking-wider select-all text-center">
-                  {currentPin}
-                </div>
+                <label className="text-xs text-gray-300 font-semibold block">Portal Username</label>
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  className="w-full py-2.5 px-3.5 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] rounded-xl text-sm font-mono text-white outline-none"
+                />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-gray-400 font-medium block">New 4-Digit PIN</label>
+                <label className="text-xs text-gray-300 font-semibold block">Portal Password</label>
                 <input
                   type="text"
-                  maxLength={4}
-                  placeholder="Enter 4 digits"
-                  value={pinInput}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, '');
-                    setPinInput(val);
-                  }}
-                  className="w-full py-2.5 px-3.5 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059]/50 focus:ring-1 focus:ring-[#C5A059]/30 rounded-xl text-sm font-mono text-white tracking-widest outline-none text-center text-lg"
+                  placeholder="Password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  className="w-full py-2.5 px-3.5 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] rounded-xl text-sm font-mono text-white outline-none"
                 />
               </div>
 
@@ -767,16 +881,256 @@ export default function OwnerPortal({
 
               <button
                 type="button"
-                onClick={handleSavePin}
-                className="w-full py-3 bg-[#C5A059] hover:bg-[#D5B069] text-black font-serif font-bold rounded-xl text-xs tracking-wider transition-all cursor-pointer active:scale-98"
+                onClick={handleSaveCredentials}
+                className="w-full py-3 bg-gradient-to-r from-[#C5A059] to-[#E5C079] hover:from-[#d1ab63] hover:to-[#ebd08f] text-black font-serif font-bold rounded-xl text-xs tracking-wider transition-all cursor-pointer active:scale-98"
               >
-                Save New PIN
+                Save New Credentials
               </button>
             </div>
           </div>
         )}
 
       </div>
+
+      {/* MODAL 1: EDIT / NEGOTIATE TRAVEL FEE */}
+      {editingFeeBooking && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#121212] border border-[#2D2D2D] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex justify-between items-center border-b border-[#2D2D2D] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-white text-lg">Edit / Negotiate Fee</h3>
+                <p className="text-xs text-gray-400">Appointment {editingFeeBooking.id} • {editingFeeBooking.clientName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingFeeBooking(null)}
+                className="text-gray-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-gray-300 font-semibold block">Notary Fee ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editNotaryFee}
+                  onChange={(e) => setEditNotaryFee(Number(e.target.value) || 0)}
+                  className="w-full py-2.5 px-3.5 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-xl text-sm font-mono text-white outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-gray-300 font-semibold block">Negotiated Travel Fee ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editTravelFee}
+                  onChange={(e) => setEditTravelFee(Number(e.target.value) || 0)}
+                  className="w-full py-2.5 px-3.5 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-xl text-sm font-mono text-white outline-none"
+                />
+                <p className="text-[10px] text-gray-500">Travel fees are negotiated and agreed upon in advance with client.</p>
+              </div>
+
+              <div className="p-3 bg-[#0D0D0D] rounded-xl border border-[#2D2D2D] flex justify-between items-center">
+                <span className="text-gray-400 font-medium">New Total Fee:</span>
+                <span className="font-mono font-bold text-lg text-[#C5A059]">${editNotaryFee + editTravelFee}.00</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 border-t border-[#2D2D2D]">
+              <button
+                type="button"
+                onClick={() => setEditingFeeBooking(null)}
+                className="px-4 py-2 rounded-xl bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveFeeEdit}
+                className="px-4 py-2 rounded-xl bg-[#C5A059] hover:bg-[#d1ab63] text-black font-bold text-xs transition"
+              >
+                Save Fee
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: CONVERT INQUIRY TO BOOKING (OWNER OVERRIDE) */}
+      {convertingInquiry && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-[#121212] border border-[#2D2D2D] rounded-2xl max-w-lg w-full p-6 shadow-2xl my-8 space-y-4">
+            <div className="flex justify-between items-center border-b border-[#2D2D2D] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-white text-lg flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#C5A059]" />
+                  Convert Inquiry to Booking
+                </h3>
+                <p className="text-xs text-gray-400">Owner override: approve any time, date, & custom travel fee.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConvertingInquiry(null)}
+                className="text-gray-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Client Name</label>
+                  <input
+                    type="text"
+                    value={convName}
+                    onChange={(e) => setConvName(e.target.value)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Client Phone</label>
+                  <input
+                    type="text"
+                    value={convPhone}
+                    onChange={(e) => setConvPhone(e.target.value)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Client Email</label>
+                <input
+                  type="email"
+                  value={convEmail}
+                  onChange={(e) => setConvEmail(e.target.value)}
+                  className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Notary Act</label>
+                  <select
+                    value={convServiceId}
+                    onChange={(e) => setConvServiceId(e.target.value)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white"
+                  >
+                    {NOTARY_SERVICES.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} (${s.fee})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Quantity / Seals</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={convQuantity}
+                    onChange={(e) => setConvQuantity(Number(e.target.value) || 1)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Date (Owner Override)</label>
+                  <input
+                    type="date"
+                    value={convDate}
+                    onChange={(e) => setConvDate(e.target.value)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Time Slot (Owner Override)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 2:00 PM"
+                    value={convTimeSlot}
+                    onChange={(e) => setConvTimeSlot(e.target.value)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Signing Location / Address</label>
+                <input
+                  type="text"
+                  placeholder="Full street address"
+                  value={convAddress}
+                  onChange={(e) => setConvAddress(e.target.value)}
+                  className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Notary Fee ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={convNotaryFee}
+                    onChange={(e) => setConvNotaryFee(Number(e.target.value) || 0)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-medium">Agreed Travel Fee ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={convTravelFee}
+                    onChange={(e) => setConvTravelFee(Number(e.target.value) || 0)}
+                    className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#0D0D0D] rounded-xl border border-[#2D2D2D] flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Confirmed Total Revenue:</span>
+                <span className="font-mono font-bold text-lg text-[#C5A059]">${convNotaryFee + convTravelFee}.00</span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Notes / Client Request</label>
+                <textarea
+                  rows={2}
+                  value={convNotes}
+                  onChange={(e) => setConvNotes(e.target.value)}
+                  className="w-full p-2 bg-[#0D0D0D] border border-[#2D2D2D] focus:border-[#C5A059] rounded-lg text-white text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-3 border-t border-[#2D2D2D]">
+              <button
+                type="button"
+                onClick={() => setConvertingInquiry(null)}
+                className="px-4 py-2 rounded-xl bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmConvertInquiry}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#C5A059] to-[#E5C079] text-black font-bold text-xs transition shadow-lg shadow-[#C5A059]/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Confirm & Create Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }
