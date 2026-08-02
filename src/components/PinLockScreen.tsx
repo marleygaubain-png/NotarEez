@@ -159,7 +159,6 @@ export default function PinLockScreen({ onSuccess, onBackToSite, correctPin }: P
             Secure Session • End-to-End Local
           </p>
           <div className="inline-block px-3 py-1 bg-[#C5A059]/5 border border-[#C5A059]/10 rounded-full text-[10px] text-[#C5A059]/80 font-mono">
-            Default PIN: <span className="font-bold underline">{correctPin}</span>
           </div>
         </div>
 
