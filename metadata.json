@@ -1,0 +1,6 @@
+{
+  "name": "NotarEez Signing Services",
+  "description": "Professional mobile notary services in Central Florida, featuring an interactive statutory-fee calculator and custom location booking system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
