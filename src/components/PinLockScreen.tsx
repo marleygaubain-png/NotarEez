@@ -152,16 +152,6 @@ export default function PinLockScreen({ onSuccess, onBackToSite, correctPin }: P
           </button>
         </div>
 
-        {/* Security Warning & Hint */}
-        <div className="w-full text-center space-y-1">
-          <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1 font-mono">
-            <Lock className="w-3 h-3 text-gray-500 shrink-0" />
-            Secure Session • End-to-End Local
-          </p>
-          <div className="inline-block px-3 py-1 bg-[#C5A059]/5 border border-[#C5A059]/10 rounded-full text-[10px] text-[#C5A059]/80 font-mono">
-          </div>
-        </div>
-
       </div>
     </div>
   );
